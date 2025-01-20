@@ -1,39 +1,47 @@
-import React, { useState, useEffect } from 'react'
-import { MediaItem } from '@/types/media'
-import MediaGrid from '@/components/MediaGrid'
-import SearchBar from '@/components/SearchBar'
-import FilterOptions from '@/components/FilterOptions'
-import LoadingSpinner from '@/components/LoadingSpinner'
-import ErrorMessage from '@/components/ErrorMessage'
-import { supabase } from '@/lib/supabase'
+import * as React from 'react';
+import { supabase } from '@/lib/supabase';
+import { MediaItem } from '@/types/media';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import ErrorMessage from '@/components/ErrorMessage';
 
-type SortOption = 'latest' | 'popular' | 'mostLiked'
+type SortOption = 'latest' | 'popular' | 'mostLiked';
 
-export default function Home() {
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
-  const [filteredItems, setFilteredItems] = useState<MediaItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<SortOption>('latest')
-  const [searchQuery, setSearchQuery] = useState('')
+interface FormEvent extends React.ChangeEvent<HTMLInputElement | HTMLSelectElement> {
+  target: HTMLInputElement | HTMLSelectElement;
+}
+
+const Home: React.FC = () => {
+  const [mediaItems, setMediaItems] = React.useState<MediaItem[]>([]);
+  const [filteredItems, setFilteredItems] = React.useState<MediaItem[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [sortBy, setSortBy] = React.useState<SortOption>('latest');
+  const [searchQuery, setSearchQuery] = React.useState('');
 
   // 加载媒体数据
-  useEffect(() => {
-    loadMediaItems()
-  }, [sortBy])
+  React.useEffect(() => {
+    loadMediaItems();
+  }, [sortBy]);
 
   const loadMediaItems = async () => {
     try {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
-      // 首先检查 Supabase 连接
-      const { error: connectionError } = await supabase.from('media').select('count')
-      if (connectionError) {
-        throw new Error('数据库连接失败')
+      // 检查 Supabase 配置
+      if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+        throw new Error('Supabase 配置缺失');
       }
 
-      let query = supabase
+      // 测试连接
+      const { error: connectionError } = await supabase.from('media').select('count');
+      if (connectionError) {
+        console.error('Connection error:', connectionError);
+        throw new Error('数据库连接失败');
+      }
+
+      // 获取数据
+      const { data, error } = await supabase
         .from('media')
         .select(`
           *,
@@ -41,63 +49,53 @@ export default function Home() {
             username
           )
         `)
+        .order('created_at', { ascending: false });
 
-      // 根据排序选项调整查询
-      switch (sortBy) {
-        case 'latest':
-          query = query.order('created_at', { ascending: false })
-          break
-        case 'popular':
-          query = query.order('views', { ascending: false })
-          break
-        case 'mostLiked':
-          query = query.order('likes', { ascending: false })
-          break
+      if (error) {
+        console.error('Query error:', error);
+        throw error;
       }
 
-      const { data, error } = await query
-
-      if (error) throw error
-
-      const items = data?.map(item => ({
+      const items = (data || []).map(item => ({
         id: item.id,
-        title: item.title,
-        description: item.description,
+        title: item.title || '无标题',
+        description: item.description || '',
         imageUrl: item.image_url,
         authorId: item.author_id,
         authorName: item.profiles?.username || '未知用户',
         createdAt: item.created_at,
         likes: item.likes || 0
-      })) || []
+      }));
 
-      setMediaItems(items)
-      setFilteredItems(items)
+      setMediaItems(items);
+      setFilteredItems(items);
     } catch (err) {
-      console.error('Error loading media:', err)
-      setError(err instanceof Error ? err.message : '加载媒体失败')
+      console.error('Error loading media:', err);
+      setError(err instanceof Error ? err.message : '加载媒体失败');
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // 处理搜索
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
+  const handleSearch = (e: FormEvent) => {
+    const query = e.target.value;
+    setSearchQuery(query);
     const filtered = mediaItems.filter(item =>
       item.title.toLowerCase().includes(query.toLowerCase()) ||
       item.description?.toLowerCase().includes(query.toLowerCase()) ||
       item.authorName.toLowerCase().includes(query.toLowerCase())
-    )
-    setFilteredItems(filtered)
-  }
+    );
+    setFilteredItems(filtered);
+  };
 
   // 处理排序
-  const handleSortChange = (sort: SortOption) => {
-    setSortBy(sort)
-  }
+  const handleSortChange = (e: FormEvent) => {
+    setSortBy(e.target.value as SortOption);
+  };
 
-  if (isLoading) return <LoadingSpinner />
-  if (error) return <ErrorMessage message={error} />
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
 
   return (
     <div className="max-w-7xl mx-auto py-12 px-4">
@@ -108,16 +106,52 @@ export default function Home() {
         <p className="text-xl text-gray-600 mb-8">
           上传、分享和发现来自世界各地创作者的精彩照片和视频。
         </p>
-        <SearchBar onSearch={handleSearch} />
-        <FilterOptions currentSort={sortBy} onSortChange={handleSortChange} />
+        <div className="flex justify-center gap-4 mb-8">
+          <input
+            type="text"
+            placeholder="搜索内容..."
+            className="px-4 py-2 border rounded-md w-full max-w-md"
+            value={searchQuery}
+            onChange={handleSearch}
+          />
+          <select
+            value={sortBy}
+            onChange={handleSortChange}
+            className="px-4 py-2 border rounded-md"
+          >
+            <option value="latest">最新</option>
+            <option value="popular">最热</option>
+            <option value="mostLiked">最多点赞</option>
+          </select>
+        </div>
       </div>
       {filteredItems.length === 0 ? (
         <div className="text-center text-gray-500">
           {searchQuery ? '没有找到相关内容' : '暂无内容'}
         </div>
       ) : (
-        <MediaGrid items={filteredItems} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredItems.map((item) => (
+            <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <img
+                src={item.imageUrl}
+                alt={item.title}
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-4">
+                <h3 className="text-lg font-semibold">{item.title}</h3>
+                <p className="text-gray-600 text-sm mt-1">{item.description}</p>
+                <div className="mt-4 flex justify-between items-center">
+                  <span className="text-sm text-gray-500">by {item.authorName}</span>
+                  <span className="text-sm text-gray-500">❤️ {item.likes}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
-  )
-}
+  );
+};
+
+export default Home;

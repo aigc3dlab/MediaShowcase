@@ -1,15 +1,15 @@
-import React from 'react'
+import React from 'react';
 
 interface ErrorMessageProps {
-  message: string
+  message: string;
 }
 
-export default function ErrorMessage({ message }: ErrorMessageProps) {
+const ErrorMessage: React.FC<ErrorMessageProps> = ({ message }: ErrorMessageProps) => {
   return (
-    <div className="flex justify-center items-center min-h-[400px]">
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-        {message}
-      </div>
+    <div className="text-center text-red-500 p-4">
+      <p>{message}</p>
     </div>
-  )
-} 
+  );
+};
+
+export default ErrorMessage; 
